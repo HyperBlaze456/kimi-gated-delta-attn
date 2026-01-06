@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="Black">
-    <option name="sdkName" value="uv (ponderTTT_review)" />
+    <option name="sdkName" value="Python 3.13" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="uv (ponderTTT_review)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="uv (kimi-gated-delta-attn)" project-jdk-type="Python SDK" />
 </project>
