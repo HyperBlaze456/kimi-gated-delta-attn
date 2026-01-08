@@ -5,11 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="197805d6-b528-4c05-8c89-0869ac1c1dde" name="변경" comment="">
-      <change afterPath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/ssd.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/kimi-gated-delta-attn.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/kimi-gated-delta-attn.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/lienar_attention.py" beforeDir="false" afterPath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/linear_attn.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/mamba2.py" beforeDir="false" afterPath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/mamba2.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/linear_attn.py" beforeDir="false" afterPath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/linear_attn.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/ssd.py" beforeDir="false" afterPath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/ssd.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -31,6 +29,7 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "Python.lienar_attention.executor": "Run",
+    "Python.ssd.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "dart.analysis.tool.window.visible": "false",
@@ -43,7 +42,7 @@
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
-  <component name="RunManager">
+  <component name="RunManager" selected="Python.ssd">
     <configuration name="linear_attn" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="kimi-gated-delta-attn" />
       <option name="ENV_FILES" value="" />
@@ -67,8 +66,32 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration name="ssd" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="kimi-gated-delta-attn" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/kimi_gated_delta_attn/naive" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/kimi_gated_delta_attn/naive/ssd.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.ssd" />
         <item itemvalue="Python.linear_attn" />
       </list>
     </recent_temporary>
@@ -94,6 +117,9 @@
       <workItem from="1767700451822" duration="471000" />
       <workItem from="1767713531181" duration="3587000" />
       <workItem from="1767747605476" duration="6942000" />
+      <workItem from="1767784352208" duration="1211000" />
+      <workItem from="1767799970394" duration="2000" />
+      <workItem from="1767832435310" duration="7464000" />
     </task>
     <servers />
   </component>
@@ -101,6 +127,7 @@
     <option name="version" value="3" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/kimi_gated_delta_attn$ssd.coverage" NAME="ssd 커버리지 결과" MODIFIED="1767839126094" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/kimi_gated_delta_attn/naive" />
     <SUITE FILE_PATH="coverage/kimi_gated_delta_attn$lienar_attention.coverage" NAME="lienar_attention 커버리지 결과" MODIFIED="1767748279266" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/kimi_gated_delta_attn/naive" />
   </component>
 </project>
