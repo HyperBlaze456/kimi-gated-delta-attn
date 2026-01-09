@@ -203,7 +203,33 @@ class SSDLinearAttention(nnx.Module):
         out = rearrange(out, "b h n d -> b n (h d)")
         out = self.o_proj(out)
 
-        # padding 위치 출력까지 깔끔히 0으로 만들고 싶으면:
+        # padding gets zeroed out
         if pad_mask is not None:
             out = out * pad_mask[..., None]
         return out
+
+class ChunkedSSDLinearAttention(nnx.Module):
+    def __init__(
+        self,
+        hidden_size: int,
+        num_heads: int,
+        head_dim: int,
+        chunk_size: int = 64,
+        eps: float = 1e-6,
+        decay_bias_shift: float = 2.0,
+        *,
+        rngs: nnx.Rngs,
+    ):
+
+        self.hidden_size = hidden_size
+        self.num_heads = num_heads
+        self.head_dim = head_dim
+        self.chunk_size = chunk_size
+        self.eps = eps
+        self.decay_bias_shift = decay_bias_shift
+
+        proj = num_heads * head_dim
+        self.q_proj = nnx.Linear(hidden_size, proj, use_bias=False, rngs=rngs)
+        self.k_proj = nnx.Linear(hidden_size, proj, use_bias=False, rngs=rngs)
+        self.v_proj = nnx.Linear(hidden_size, proj, use_bias=False, rngs=rngs)
+        self.o_proj = nnx.Linear(proj, hidden_size, use_bias=False, rngs=rngs)
