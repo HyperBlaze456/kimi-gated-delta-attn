@@ -6,7 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="197805d6-b528-4c05-8c89-0869ac1c1dde" name="변경" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/linear_attn.py" beforeDir="false" afterPath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/linear_attn.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/mamba2.py" beforeDir="false" afterPath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/mamba2.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/ssd.py" beforeDir="false" afterPath="$PROJECT_DIR$/kimi_gated_delta_attn/naive/ssd.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -26,22 +26,22 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Python.lienar_attention.executor": "Run",
-    "Python.ssd.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "dart.analysis.tool.window.visible": "false",
-    "git-widget-placeholder": "main",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.lienar_attention.executor&quot;: &quot;Run&quot;,
+    &quot;Python.ssd.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RunManager" selected="Python.ssd">
     <configuration name="linear_attn" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="kimi-gated-delta-attn" />
@@ -119,7 +119,10 @@
       <workItem from="1767747605476" duration="6942000" />
       <workItem from="1767784352208" duration="1211000" />
       <workItem from="1767799970394" duration="2000" />
-      <workItem from="1767832435310" duration="7464000" />
+      <workItem from="1767832435310" duration="9408000" />
+      <workItem from="1767928054008" duration="1637000" />
+      <workItem from="1768001940546" duration="2476000" />
+      <workItem from="1768029860383" duration="1846000" />
     </task>
     <servers />
   </component>

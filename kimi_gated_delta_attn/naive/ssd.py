@@ -239,7 +239,6 @@ def ssd_linear_attention_chunked(
     (_, _), (S_beforeT, Z_beforeT) = jax.lax.scan(step, (S0, Z0), (decayT, S_chunkT, Z_chunkT))
     S_before = jnp.transpose(S_beforeT, (1, 2, 0, 3, 4))        # (B,H,G,Dk,Dv)
     Z_before = jnp.transpose(Z_beforeT, (1, 2, 0, 3))           # (B,H,G,Dk)
-
     # --- (4) state->output: 청크 시작 state가 각 토큰에 주는 기여를 prefix로 반영 ---
     # (수식)
     # S_{g,i} = prefix[g,i] * S_before[g] + (intra terms)
@@ -287,9 +286,47 @@ def check_equivalence_small():
     out_exp = ssd_masked_linear_attention_explicit(q, k, v, a, pad_mask=pad_mask, eps=1e-6)
     out_scan = ssd_masked_linear_attention_scan(q, k, v, a, pad_mask=pad_mask, eps=1e-6)
 
-    print("max diff:", jnp.max(jnp.abs(out_exp - out_scan)))
+    print("explicit vs scan:", jnp.max(jnp.abs(out_exp - out_scan)))
+
+    # Chunked 테스트 (다양한 chunk_size)
+    for chunk_size in [2, 4, 8]:
+        out_chunked = ssd_linear_attention_chunked(
+            q, k, v, a, pad_mask=pad_mask,
+            chunk_size=chunk_size, eps=1e-6
+        )
+        diff = jnp.max(jnp.abs(out_exp - out_chunked))
+        print(f"explicit vs chunked (C={chunk_size}): {diff}")
+
+
+def check_equivalence_large():
+    """더 긴 시퀀스로 테스트"""
+    key = jax.random.PRNGKey(42)
+    B, H, N, D = 2, 4, 128, 32
+
+    k1, k2, k3, k4 = jax.random.split(key, 4)
+    q = elu_plus_one(jax.random.normal(k1, (B, H, N, D)))
+    k = elu_plus_one(jax.random.normal(k2, (B, H, N, D)))
+    v = jax.random.normal(k3, (B, H, N, D))
+
+    a_logits = jax.random.normal(k4, (B, H, N))
+    a = jax.nn.sigmoid(a_logits + 2.0)
+
+    pad_mask = jnp.ones((B, N), dtype=jnp.float32)
+
+    out_exp = ssd_masked_linear_attention_explicit(q, k, v, a, pad_mask=pad_mask, eps=1e-6)
+
+    print("\n=== Large sequence test (N=128) ===")
+    for chunk_size in [8, 16, 32, 64]:
+        out_chunked = ssd_linear_attention_chunked(
+            q, k, v, a, pad_mask=pad_mask,
+            chunk_size=chunk_size, eps=1e-6
+        )
+        diff = jnp.max(jnp.abs(out_exp - out_chunked))
+        print(f"explicit vs chunked (C={chunk_size}): {diff}")
 
 
 
 if __name__ == '__main__':
+    print("=== Small sequence test (N=8) ===")
     check_equivalence_small()
+    check_equivalence_large()
