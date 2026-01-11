@@ -256,11 +256,11 @@ class Mamba2Block(nnx.Module):
         C_mat = jnp.repeat(C_mat, heads_per_group, axis=2)  # (B, L, nheads, d_state)
 
         # Compute dt: softplus(dt_logits + dt_bias) for stability
-        dt = softplus(dt_logits + self.dt_bias.value)  # (B, L, nheads)
+        dt = softplus(dt_logits + self.dt_bias.get_value())  # (B, L, nheads)
 
         # Compute decay a = exp(-dt * A)
         # A is stored as log(A) for numerical stability
-        A = jnp.exp(self.A_log.value)  # (nheads,)
+        A = jnp.exp(self.A_log.get_value())  # (nheads,)
         a = jnp.exp(-dt * A)  # (B, L, nheads) - decay factors in (0, 1]
 
         # =================================================================
@@ -289,7 +289,7 @@ class Mamba2Block(nnx.Module):
 
         # Add skip connection: y = y + D * x
         # D acts like the residual connection in attention
-        D = self.D.value  # (nheads,)
+        D = self.D.get_value()  # (nheads,)
         y = y + D[None, :, None, None] * v  # (B, nheads, L, headdim)
 
         # Transpose back: (B, nheads, L, headdim) → (B, L, d_inner)
@@ -338,7 +338,7 @@ class Mamba2Block(nnx.Module):
 
         # Kernel: (k, D) -> reshape to (D, 1, k) for depthwise conv
         # feature_group_count=D makes it depthwise
-        kernel = self.conv_weight.value  # (k, D)
+        kernel = self.conv_weight.get_value()  # (k, D)
         kernel = jnp.transpose(kernel, (1, 0))  # (D, k)
         kernel = kernel[:, None, :]  # (D, 1, k) - [out_channels, in_channels/groups, width]
 
@@ -358,7 +358,7 @@ class Mamba2Block(nnx.Module):
 
         # Add bias if present
         if self.conv_bias is not None:
-            y = y + self.conv_bias.value
+            y = y + self.conv_bias.get_value()
 
         return y
 
@@ -434,7 +434,7 @@ def test_mamba2_block():
     print("✓ Gradients computed successfully")
 
     # Check some parameter gradients exist
-    in_proj_grad = grads.in_proj.kernel.value
+    in_proj_grad = grads.in_proj.kernel.get_value()
     print(f"in_proj gradient shape: {in_proj_grad.shape}, mean: {jnp.mean(jnp.abs(in_proj_grad)):.6f}")
 
     print("\n" + "=" * 60)
