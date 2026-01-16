@@ -149,14 +149,16 @@ class Mamba2Block(nnx.Module):
         # =====================================================================
         # Depthwise 1D conv on x for short-range dependencies
         # This helps capture local patterns before the SSM processes them
-        # Uses 'same' padding equivalent via manual padding for causality
-        self.conv_weight = nnx.Param(
-            nnx.initializers.lecun_normal()(rngs.params(), (d_conv, self.d_inner))
+        # nnx.Conv supports 'CAUSAL' padding for 1D convs.
+        self.conv = nnx.Conv(
+            in_features=self.d_inner,
+            out_features=self.d_inner,
+            kernel_size=self.d_conv,
+            padding="CAUSAL",
+            feature_group_count=self.d_inner,
+            use_bias=conv_bias,
+            rngs=rngs,
         )
-        if conv_bias:
-            self.conv_bias = nnx.Param(jnp.zeros(self.d_inner))
-        else:
-            self.conv_bias = None
 
         # =====================================================================
         # SSM Parameters
@@ -312,9 +314,6 @@ class Mamba2Block(nnx.Module):
         """
         Apply causal 1D depthwise convolution.
 
-        Causal means we only look at past tokens, not future.
-        Depthwise means each channel is convolved independently.
-
         Parameters:
         -----------
         x : jax.Array
@@ -325,42 +324,7 @@ class Mamba2Block(nnx.Module):
         jax.Array
             Output of shape (B, L, d_inner)
         """
-        B, L, D = x.shape
-        k = self.d_conv
-
-        # Pad left side for causal convolution
-        # We pad (k-1) on the left so output[t] only depends on input[t-k+1:t+1]
-        x_padded = jnp.pad(x, ((0, 0), (k - 1, 0), (0, 0)))  # (B, L+k-1, D)
-
-        # Use jax.lax.conv_general_dilated for depthwise convolution
-        # Input: (B, L+k-1, D) -> transpose to (B, D, L+k-1) for NCHW-like format
-        x_t = jnp.transpose(x_padded, (0, 2, 1))  # (B, D, L+k-1)
-
-        # Kernel: (k, D) -> reshape to (D, 1, k) for depthwise conv
-        # feature_group_count=D makes it depthwise
-        kernel = self.conv_weight.get_value()  # (k, D)
-        kernel = jnp.transpose(kernel, (1, 0))  # (D, k)
-        kernel = kernel[:, None, :]  # (D, 1, k) - [out_channels, in_channels/groups, width]
-
-        # Depthwise 1D convolution
-        # dimension_numbers: (batch, channels, spatial) for input, kernel, output
-        y = jax.lax.conv_general_dilated(
-            x_t,                          # (B, D, L+k-1)
-            kernel,                       # (D, 1, k)
-            window_strides=(1,),
-            padding='VALID',              # No padding (already padded)
-            feature_group_count=D,        # Depthwise: each channel convolved separately
-            dimension_numbers=('NCH', 'OIH', 'NCH')  # N=batch, C=channel, H=spatial
-        )  # (B, D, L)
-
-        # Transpose back to (B, L, D)
-        y = jnp.transpose(y, (0, 2, 1))  # (B, L, D)
-
-        # Add bias if present
-        if self.conv_bias is not None:
-            y = y + self.conv_bias.get_value()
-
-        return y
+        return self.conv(x)
 
 
 # =============================================================================
