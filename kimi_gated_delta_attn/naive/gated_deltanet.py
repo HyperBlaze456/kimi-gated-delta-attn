@@ -121,7 +121,7 @@ def _apply_A(g_t: jax.Array, k_t: jax.Array, beta_t: jax.Array, x: jax.Array) ->
     return x1 - beta_t[..., None, None] * update
 
 
-def fused_recurrent_gda(
+def recurrent_kda(
     q: jax.Array,
     k: jax.Array,
     v: jax.Array,
@@ -136,7 +136,7 @@ def fused_recurrent_gda(
     **_unused,
 ):
     """
-    Per-token recurrent delta network.
+    Per-token recurrent delta network. Ops not fused -> pallas kernel write might be needed.
 
     Expected shapes (preferred): q,k,v = (B, H, N, D).
     If given (B, N, H, D), tensors are transposed heuristically.
@@ -200,7 +200,7 @@ def fused_recurrent_gda(
     return out
 
 
-def chunk_gda(
+def chunk_kda(
     q: jax.Array,
     k: jax.Array,
     v: jax.Array,

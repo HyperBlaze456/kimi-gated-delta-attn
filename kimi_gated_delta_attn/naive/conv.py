@@ -86,10 +86,9 @@ class ShortConvolution(nnx.Module):
         mask: jax.Array | None = None,
         cache: jax.Array | None = None,
         output_final_state: bool = False,
-        cu_seqlens: jax.Array | None = None,
     ):
-        if cu_seqlens is not None:
-            raise NotImplementedError("cu_seqlens path is not supported in this JAX port.")
+        # TODO: support different sized batches using cu_seqlens and such
+        # Also profile
 
         if mask is not None:
             if mask.ndim == 2:
