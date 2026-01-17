@@ -121,7 +121,7 @@ def _apply_A(g_t: jax.Array, k_t: jax.Array, beta_t: jax.Array, x: jax.Array) ->
     return x1 - beta_t[..., None, None] * update
 
 
-def fused_recurrent_kda(
+def fused_recurrent_gda(
     q: jax.Array,
     k: jax.Array,
     v: jax.Array,
@@ -200,7 +200,7 @@ def fused_recurrent_kda(
     return out
 
 
-def chunk_kda(
+def chunk_gda(
     q: jax.Array,
     k: jax.Array,
     v: jax.Array,
