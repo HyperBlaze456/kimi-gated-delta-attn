@@ -55,7 +55,17 @@ But, there are some differences to standard convolution(`nnx.Conv`).
 . Receive `x_4`: roll → `[x_2, x_3, 0]`, write → `[x_2, x_3, x_4]` (oldest `x_1` dropped)
 
 ### FusedRMSNormGated
-In the original `triton` implementation, the gating logic is fused naturally in to 
+In the original `triton` implementation, the gating logic is 'fused'.
+
+The JAX implementation does not have all that. It just gates it sequentially. JAX has a strong compiler, so it should be tested whether if the calculations are fused or not after compile.
+
+Fortunately, the logic itself is very straightforward.
+
+We do standard root-mean-square normalization. The gate can be applied before or after.
+
+Then the typical weight and optional bias addition is done.
+
+Overall very simple and easy to understand module, except that further on kernel might be needed.
 
 The definition of pass is present at [gated_deltanet.py](naive/gated_deltanet.py)
 
