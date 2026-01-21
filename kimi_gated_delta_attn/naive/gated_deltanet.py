@@ -265,7 +265,7 @@ def chunk_kda(
     g = g.reshape(batch_size, num_heads, G, C, head_dim)
     beta = beta.reshape(batch_size, num_heads, G, C)
 
-    kT = jnp.transpose(k, (3, 0, 1, 2, 4))
+    kT = jnp.transpose(k, (3, 0, 1, 2, 4)) # C, B, H, G, D
     vT = jnp.transpose(v, (3, 0, 1, 2, 4))
     gT = jnp.transpose(g, (3, 0, 1, 2, 4))
     betaT = jnp.transpose(beta, (3, 0, 1, 2))
@@ -281,6 +281,7 @@ def chunk_kda(
         B_accum = _apply_A(gt, kt, betat, B_accum)
         B_accum = B_accum + betat[..., None, None] * jnp.einsum("...d,...v->...dv", kt, vt)
         return (A_accum, B_accum), None
+    # Scan in chunk dimension?
 
     (A_chunk, B_chunk), _ = jax.lax.scan(summary_step, (A0, B0), (kT, vT, gT, betaT))
 

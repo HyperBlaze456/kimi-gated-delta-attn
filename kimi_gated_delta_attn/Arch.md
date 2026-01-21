@@ -117,91 +117,68 @@ The third line exactly does that.
 
 In the pytorch/triton implementation, it says 'only chunk supports training'.
 
-So I think it is worth noting how exactly chunked KDA function works in detail, and analyze how does the gradient of the function looks like.
+So I think it is worth noting how exactly chunked KDA function works in detail, and analyze how does the gradient of the function looks like utilizing jax's .grad() transformation.
 
-  - 입력 레이아웃 정렬/검증 후 g, beta, pad_mask를 브로드캐스트/정규화합니다. q,k,v는 BHND 형식이 기본이고 BNHD면 전치합니다. pad_mask는 (B,N)로 맞춥니다. (kimi_gated_delta_attn/naive/gated_deltanet.py:224-249)                                               
-  - 옵션으로 q/k L2 정규화 후, 마스크 적용: q,k,v는 0으로, beta는 0으로, g는 1로 만들어 패딩 토큰이 상태에 영향 못 주게 합니다. (240-249)                                                                                                                        
-  - 시퀀스를 chunk_size 배수로 패딩합니다. q,k,v는 0, g는 1, beta는 0으로 패딩됩니다. (251-255)                                                                                                                                                                  
-  - (B,H,N,D) → (B,H,G,C,…)로 리쉐이프(G=chunk 수)하고, time-major로 transpose합니다. (262-271)                                                                                                                                                                  
-  - summary_step: 각 chunk 내부 토큰을 스캔해서 A_chunk, B_chunk를 만듭니다. 여기서 _apply_A는                                                                                                                                                                   
-    A_t = (I - beta_t * k_t k_t^T) * diag(g_t) 를 명시적으로 만들지 않고 누적에 적용합니다.                                                                                                                                                                      
-    B는 beta * k * v^T 항을 누적합니다. (summary_step:277-285, _apply_A:116-121)                                                                                                                                                                                 
-  - chunk_step: chunk 단위로 S_next = A_chunk * S_prev + B_chunk를 스캔해 각 chunk 시작 상태 S_before를 계산합니다. (295-302)                                                                                                                                    
-  - 출력은 다시 원래 shape로 합치고 패딩된 길이를 잘라냅니다. 입력이 BNHD였으면 복원 전치합니다. (325-329)
-  - output_final_state=True면 chunk-level scan의 최종 상태 Sf를 함께 반환합니다. (331-332)
+The first bunch of lines are just shape transposing, padding for chunking, and normalization.
 
-  배경: 원래 per-token recurrence (recurrent_kda)                                                                                                                                                                                                                
+Then we see this:
+
+```python
+    Np = q.shape[2]
+    G = Np // chunk_size
+    C = chunk_size
+    Dv = v.shape[-1]
+    
+    q = q.reshape(batch_size, num_heads, G, C, head_dim)
+    k = k.reshape(batch_size, num_heads, G, C, head_dim)
+    v = v.reshape(batch_size, num_heads, G, C, Dv)
+    g = g.reshape(batch_size, num_heads, G, C, head_dim)
+    beta = beta.reshape(batch_size, num_heads, G, C)
+
+    kT = jnp.transpose(k, (3, 0, 1, 2, 4))
+    vT = jnp.transpose(v, (3, 0, 1, 2, 4))
+    gT = jnp.transpose(g, (3, 0, 1, 2, 4))
+    betaT = jnp.transpose(beta, (3, 0, 1, 2))
+
+    eye = jnp.eye(head_dim, dtype=q.dtype)
+    A0 = jnp.broadcast_to(eye, (batch_size, num_heads, G, head_dim, head_dim))
+    B0 = jnp.zeros((batch_size, num_heads, G, head_dim, Dv), dtype=q.dtype)
+```
+
+We move the chunk size dimension to the very first axis. (B, H, G, C, D) gets transposed to (C, B, H, G, D).
+
+Due to this, the .scan() works over the token index inside each chunk with length C. All batch/head/chunk groups are processed in parallel.
+
+Let's now actually see the `summary_step` function and how does it accumulate each value.
+
+- Carry: (A_accum, B_accum)
+  - A_accum: starts as identity; becomes the product of per‑token A_t within the chunk. A_t is the unified term to decay and delta update(forget) the previous state.
+  - B_accum: starts at 0; becomes the affine offset accumulated from the per‑token “b_t” updates. B_t is what gets added by the delta rule.
+- Each step does:
+  - A_accum ← A_t · A_accum
+  - B_accum ← A_t · B_accum + b_t
+- b_t = beta_t * (k_t v_t^T)
+- `_apply_A()` computes A_t · x without explicitly forming A_t
+  - A_t = (I − beta_t k_t k_t^T) · diag(g_t); implemented by first multiplying x by g_t, then applying the rank‑1 update.
+  - 
+
+- What it accumulates (and how)                                                                                                                                                                                                                                  
                                                                                                                                                                                                                                                                  
-  - 상태 S_t는 (B,H,D,Dv) 형태이고, 토큰마다 업데이트됩니다.                                                                                                                                                                                                     
-  - 업데이트식은 아래와 같습니다. ( kimi_gated_delta_attn/naive/gated_deltanet.py:183-189 )                                                                                                                                                                      
-      - S_base = diag(g_t) * S_{t-1}                                                                                                                                                                                                                             
-      - pred = k_t^T * S_base  (코드: einsum("bhd,bhdv->bhv", kt, S_base))                                                                                                                                                                                       
-      - delta = v_t - pred                                                                                                                                                                                                                                       
-      - S_t = S_base + beta_t * (k_t * delta^T)                                                                                                                                                                                                                  
-        (코드: einsum("bhd,bhv->bhdv", kt, delta))                                                                                                                                                                                                               
-                                                                                                                                                                                                                                                                 
-  이걸 토큰마다 직접 스캔하면 O(N) 순차인데, chunk_kda는 chunk 단위로 병렬화하려고 summary_step와 chunk_step을 둡니다.                                                                                                                                           
-                                                                                                                                                                                                                                                                 
-  ———                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                 
-  1) summary_step — chunk 내부를 요약해 A_chunk, B_chunk 생성                                                                                                                                                                                                    
-  코드 위치: summary_step (277-285), _apply_A (116-121)                                                                                                                                                                                                          
-                                                                                                                                                                                                                                                                 
-  핵심 아이디어:                                                                                                                                                                                                                                                 
-                                                                                                                                                                                                                                                                 
-  - per-token update는 “선형 변환 + 저차 업데이트” 구조라서, chunk 안의 여러 토큰을 합치면                                                                                                                                                                       
-                                                                                                                                                                                                                                                                 
-    S_after_chunk = A_chunk * S_before_chunk + B_chunk                                                                                                                                                                                                           
-    형태로 요약됩니다.                                                                                                                                                                                                                                           
-                                                                                                                                                                                                                                                                 
-  summary_step는 이 A_chunk, B_chunk를 토큰을 따라 누적해서 만들어요.                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                 
-  정의:                                                                                                                                                                                                                                                          
-                                                                                                                                                                                                                                                                 
-  - _apply_A(gt, kt, betat, X)는 다음 선형변환을 X에 적용:                                                                                                                                                                                                       
-                                                                                                                                                                                                                                                                 
-    A_t = (I - beta_t * k_t k_t^T) * diag(g_t)
-    (코드에서는 행렬을 만들지 않고, x1 = g_t * X, proj = k_t^T x1, x1 - beta*k_t*proj로 처리)                                                                                                                                                                    
-                                                                                                                                                                                                                                                                 
-  summary_step 안의 누적:                                                                                                                                                                                                                                        
-                                                                                                                                                                                                                                                                 
-  - A_accum는 A_t들을 곱한 결과:
-                                                                                                                                                                                                                                                                 
-    A_accum ← A_t * A_accum                                                                                                                                                                                                                                      
-  - B_accum는 현재까지 누적된 bias:                                                                                                                                                                                                                              
-                                                                                                                                                                                                                                                                 
-    B_accum ← A_t * B_accum + beta_t * k_t * v_t^T                                                                                                                                                                                                               
-                                                                                                                                                                                                                                                                 
-  그래서 chunk 내부 토큰들을 scan하면,                                                                                                                                                                                                                           
-  “이 chunk를 통째로 통과했을 때 상태가 어떻게 변하는지”가 A_chunk, B_chunk로 요약됩니다.                                                                                                                                                                        
-                                                                                                                                                                                                                                                                 
-  ———                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                 
-  2) chunk_step — chunk 경계 상태를 빠르게 이동                                                                                                                                                                                                                  
-  코드 위치: chunk_step (295-299), jax.lax.scan (301)                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                 
-  이제 각 chunk는 하나의 선형 변환처럼 취급 가능:                                                                                                                                                                                                                
-                                                                                                                                                                                                                                                                 
-  S_next = A_chunk * S_prev + B_chunk                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                 
-  chunk_step는 이걸 chunk 순서대로 스캔해서:                                                                                                                                                                                                                     
-                                                                                                                                                                                                                                                                 
-  - S_before = 각 chunk의 시작 상태                                                                                                                                                                                                                              
-  - Sf = 마지막 chunk 이후 최종 상태                                                                                                                                                                                                                             
-                                                                                                                                                                                                                                                                 
-  을 계산합니다.                                                                                                                                                                                                                                                 
-  즉, per-token이 아니라 chunk 단위로 상태를 전개하는 단계입니다.                                                                                                                                                                                                
-                                                                                                                                                                                                                                                                 
-  ———                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                 
-  왜 두 단계가 필요하나                                                                                                                                                                                                                                          
-                                                                                                                                                                                                                                                                 
-  - summary_step는 chunk 내부 요약 (A/B 생성)                                                                                                                                                                                                                    
-  - chunk_step는 chunk 경계 상태 전개                                                                                                                                                                                                                            
-  - 이후에야 S_before를 초기값으로 per-token recurrence를 chunk마다 병렬 처리할 수 있음 (vmap)                                                                                                                                                                   
-                                                                                                                                                                                                                                                                 
-  즉, summary_step → chunk_step 덕분에 전체 시퀀스를 순차 처리하지 않고,                                                                                                                                                                                         
-  chunk 단위 병렬성을 확보합니다.
+    - Carry = (A_accum, B_accum) per (B,H,G):                                                                                                                                                                                                                      
+        - A_accum: starts as identity; becomes the product of per‑token A_t within the chunk.                                                                                                                                                                      
+        - B_accum: starts at 0; becomes the affine offset accumulated from the per‑token “b_t” updates.                                                                                                                                                            
+    - Each scan step does:                                                                                                                                                                                                                                         
+        - A_accum ← A_t · A_accum                                                                                                                                                                                                                                  
+        - B_accum ← A_t · B_accum + b_t                                                                                                                                                                                                                            
+    - Here b_t = beta_t * (k_t v_t^T) (same in both gated and non‑gated).                                                                                                                                                                                          
+    - _apply_A(...) computes A_t · x without explicitly forming A_t:                                                                                                                                                                                               
+        - Non‑gated (deltanet.py): A_t = I − beta_t k_t k_t^T                                                                                                                                                                                                      
+        - Gated (gated_deltanet.py): A_t = (I − beta_t k_t k_t^T) · diag(g_t); implemented by first multiplying x by g_t, then applying the rank‑1 update.                                                                                                         
+    - Result after the scan:                                                                                                                                                                                                                                       
+        - A_chunk = A_C … A_2 A_1                                                                                                                                                                                                                                  
+        - B_chunk = b_C + A_C b_{C-1} + A_C A_{C-1} b_{C-2} + …                                                                                                                                                                                                    
+        - So the whole chunk is summarized as S_after = A_chunk · S_before + B_chunk, which chunk_step uses next
+
 
 ### KDA gate
 
