@@ -150,13 +150,24 @@ We move the chunk size dimension to the very first axis. (B, H, G, C, D) gets tr
 Due to this, the .scan() works over the token index inside each chunk with length C. All batch/head/chunk groups are processed in parallel.
 
 Let's now actually see the `summary_step` function and how does it accumulate each value.
-
+```python
+    def summary_step(carry, inputs):
+        A_accum, B_accum = carry
+        kt, vt, gt, betat = inputs
+        A_accum = _apply_A(gt, kt, betat, A_accum)
+        B_accum = _apply_A(gt, kt, betat, B_accum)
+        B_accum = B_accum + betat[..., None, None] * jnp.einsum("...d,...v->...dv", kt, vt)
+        return (A_accum, B_accum), None
+```
 - Carry: (A_accum, B_accum)
   - A_accum: starts as identity; becomes the product of per‑token A_t within the chunk. A_t is the unified term to decay and delta update(forget) the previous state.
   - B_accum: starts at 0; becomes the affine offset accumulated from the per‑token “b_t” updates. B_t is what gets added by the delta rule.
 - Each step does:
   - A_accum ← A_t · A_accum
   - B_accum ← A_t · B_accum + b_t
+
+We also see that the function _apply_A is also used for calculating both A and B.
+
 - b_t = beta_t * (k_t v_t^T)
 - `_apply_A()` computes A_t · x without explicitly forming A_t
   - A_t = (I − beta_t k_t k_t^T) · diag(g_t); implemented by first multiplying x by g_t, then applying the rank‑1 update.
