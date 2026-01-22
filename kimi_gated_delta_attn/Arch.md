@@ -121,7 +121,7 @@ So I think it is worth noting how exactly chunked KDA function works in detail, 
 
 The first bunch of lines are just shape transposing, padding for chunking, and normalization.
 
-Then we see this:
+Let's look at the first scanned function, `summary_step`. For starters, we visit how inputs are reshaped and rearranged.
 
 ```python
     Np = q.shape[2]
@@ -166,29 +166,35 @@ Let's now actually see the `summary_step` function and how does it accumulate ea
   - A_accum ← A_t · A_accum
   - B_accum ← A_t · B_accum + b_t
 
-We also see that the function _apply_A is also used for calculating both A and B.
+We also see that the function _apply_A is also used for calculating both A and B. Let's see how exactly what is going on here.
 
 - b_t = beta_t * (k_t v_t^T)
 - `_apply_A()` computes A_t · x without explicitly forming A_t
-  - A_t = (I − beta_t k_t k_t^T) · diag(g_t); implemented by first multiplying x by g_t, then applying the rank‑1 update.
-  - 
+  - A_t = (I − beta_t k_t k_t^T) · diag(g_t); implemented by first multiplying x by g_t, then applying the rank‑1 update. diag(g_t) term is unique to this Gated DeltaNet.
+  - As defined up there, B_t is just A_t time previous B_{t-1}, then update. Remember that updates happen per token, requiring them to be also decayed if they are done parallel via chunks.
 
-- What it accumulates (and how)                                                                                                                                                                                                                                  
-                                                                                                                                                                                                                                                                 
-    - Carry = (A_accum, B_accum) per (B,H,G):                                                                                                                                                                                                                      
-        - A_accum: starts as identity; becomes the product of per‑token A_t within the chunk.                                                                                                                                                                      
-        - B_accum: starts at 0; becomes the affine offset accumulated from the per‑token “b_t” updates.                                                                                                                                                            
-    - Each scan step does:                                                                                                                                                                                                                                         
-        - A_accum ← A_t · A_accum                                                                                                                                                                                                                                  
-        - B_accum ← A_t · B_accum + b_t                                                                                                                                                                                                                            
-    - Here b_t = beta_t * (k_t v_t^T) (same in both gated and non‑gated).                                                                                                                                                                                          
-    - _apply_A(...) computes A_t · x without explicitly forming A_t:                                                                                                                                                                                               
-        - Non‑gated (deltanet.py): A_t = I − beta_t k_t k_t^T                                                                                                                                                                                                      
-        - Gated (gated_deltanet.py): A_t = (I − beta_t k_t k_t^T) · diag(g_t); implemented by first multiplying x by g_t, then applying the rank‑1 update.                                                                                                         
-    - Result after the scan:                                                                                                                                                                                                                                       
-        - A_chunk = A_C … A_2 A_1                                                                                                                                                                                                                                  
-        - B_chunk = b_C + A_C b_{C-1} + A_C A_{C-1} b_{C-2} + …                                                                                                                                                                                                    
-        - So the whole chunk is summarized as S_after = A_chunk · S_before + B_chunk, which chunk_step uses next
+- Result after the scan:                                                                                                                                                                                                                                       
+  - A_chunk = A_C … A_2 A_1                                                                                                                                                                                                                                  
+  - B_chunk = b_C + A_C b_{C-1} + A_C A_{C-1} b_{C-2} + …                                                                                                                                                                                                    
+  - So the whole chunk is summarized as S_after = A_chunk · S_before + B_chunk.
+  - This is done for every chunk. Now each chunk is 'summarized' to a single state. Further operation to propagate those data throughout all the sequences would be done for the axis 'G'.
+
+The final A_chunk and B_chunk looks like the following.
+A_chunk → (B, H, G, D, D)
+B_chunk → (B, H, G, D, Dv)
+
+
+
+Let's now look at the second function, `chunk_step`.
+```python
+    A_chunkT = jnp.transpose(A_chunk, (2, 0, 1, 3, 4))
+    B_chunkT = jnp.transpose(B_chunk, (2, 0, 1, 3, 4))
+```
+- A_chunkT = transpose(A_chunk, (2,0,1,3,4)) → (G, B, H, D, D)
+- B_chunkT = transpose(B_chunk, (2,0,1,3,4)) → (G, B, H, D, Dv)
+
+We see that the operation is now being done for each chunk.
+
 
 
 ### KDA gate
