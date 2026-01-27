@@ -193,9 +193,62 @@ Let's now look at the second function, `chunk_step`.
 - A_chunkT = transpose(A_chunk, (2,0,1,3,4)) → (G, B, H, D, D)
 - B_chunkT = transpose(B_chunk, (2,0,1,3,4)) → (G, B, H, D, Dv)
 
-We see that the operation is now being done for each chunk.
+We see that the operation is now being done for each chunk group iteratively.
 
+```python
+    def chunk_step(S_prev, inputs):
+        A_g, B_g = inputs
+        S_before = S_prev
+        S_next = jnp.einsum("bhij,bhjv->bhiv", A_g, S_prev) + B_g
+        return S_next, S_before
+```
 
+The step function is extremely simple. We apply the decay + delta rule which makes it get updated until the end of the chunk,
+and add new B_g.
+
+Remember that the chunk has been 'summarized'.
+
+The sequence that looks like this:
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+
+When each chunk's size is 4, it gets summarized into three chunks.
+
+[G1, G2, G3]
+
+Each chunk's value is same as a single token's state. It holds all the processed values up until the last token that chunk has.
+
+So it is essentially same as: 
+
+[3, 7, 11], but these last tokens of the chunk are already summarized to get updated with every preceding values inside each chunk.
+
+However, this is actually the S_next! Even though this is crucial for propagating the data, the end result is 'start of the chunk'. The reason is due to the next function.
+
+Let's analyze `scan_chunk`.
+
+```python
+    def scan_chunk(S_init, q_chunk, k_chunk, v_chunk, g_chunk, beta_chunk):
+        def step(S, inputs):
+            qt, kt, vt, gt, betat = inputs
+            S_base = gt[..., None] * S
+            pred = jnp.einsum("bhd,bhdv->bhv", kt, S_base)
+            delta = vt - pred
+            S = S_base + betat[..., None, None] * jnp.einsum("bhd,bhv->bhdv", kt, delta)
+            out = jnp.einsum("bhd,bhdv->bhv", qt, S)
+            return S, out
+
+        _, out = jax.lax.scan(step, S_init, (q_chunk, k_chunk, v_chunk, g_chunk, beta_chunk))
+        return out
+```
+
+The preceding two scan functions' purpose are the following:
+- `summary_step`: 'Summarizes' each chunk group, doing the per-token online update of the state to have a single chunk state
+- `chunk_step`: Scans for each chunk, propagating each chunk's data to other chunks. Gets the 'start' of each chunk.
+
+So they are only working on chunks. We don't really have per-token information.
+
+scan_chunk resolves that. We do chunkwise scan, and vmap the function to chunk group axis for parallelism.
+
+The step function is exactly the same as recurrent_kda. Essentially, the preceding chunk functions were just there to communicate between chunks, nothing more than that.
 
 ### KDA gate
 

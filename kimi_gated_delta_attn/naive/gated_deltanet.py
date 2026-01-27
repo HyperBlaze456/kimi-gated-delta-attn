@@ -302,12 +302,12 @@ def chunk_kda(
     Sf, S_beforeT = jax.lax.scan(chunk_step, S0, (A_chunkT, B_chunkT))
     S_before = jnp.transpose(S_beforeT, (1, 2, 0, 3, 4))
 
-    qT = jnp.transpose(q, (2, 3, 0, 1, 4))
+    qT = jnp.transpose(q, (2, 3, 0, 1, 4)) # (G, C, B, H, D)
     kT = jnp.transpose(k, (2, 3, 0, 1, 4))
     vT = jnp.transpose(v, (2, 3, 0, 1, 4))
     gT = jnp.transpose(g, (2, 3, 0, 1, 4))
     betaT = jnp.transpose(beta, (2, 3, 0, 1))
-    S_beforeT = jnp.transpose(S_before, (2, 0, 1, 3, 4))
+    S_beforeT = jnp.transpose(S_before, (2, 0, 1, 3, 4)) # (G, B, H, D, Dv)
 
     def scan_chunk(S_init, q_chunk, k_chunk, v_chunk, g_chunk, beta_chunk):
         def step(S, inputs):
