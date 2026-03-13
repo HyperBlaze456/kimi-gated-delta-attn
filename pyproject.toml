@@ -4,3 +4,10 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.13"
 dependencies = []
+
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+log_cli = true
+log_cli_level = "INFO"
+testpaths = ["tests"]
