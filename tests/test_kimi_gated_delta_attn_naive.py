@@ -1,5 +1,6 @@
 import gzip
 import logging
+import os
 import tempfile
 from pathlib import Path
 
@@ -56,6 +57,26 @@ def _find_trace_annotations(trace_file: Path, *needles: str) -> set[str]:
     return found
 
 
+def _profiler_log_dir() -> Path:
+    configured = os.environ.get("KIMI_PROFILE_DIR")
+    if configured:
+        path = Path(configured).expanduser()
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    return Path(tempfile.mkdtemp(prefix="kimi-prof-"))
+
+
+def _latest_trace_dir(log_dir: Path) -> Path:
+    trace_root = log_dir / "plugins" / "profile"
+    trace_dirs = sorted(trace_root.iterdir(), key=lambda path: path.stat().st_mtime)
+    assert trace_dirs, f"Expected profiler output under {trace_root}."
+    return trace_dirs[-1]
+
+
+def _perfetto_viewer_url(trace_name: str, port: int = 9001) -> str:
+    return f"https://ui.perfetto.dev/#!/?url=http://127.0.0.1:{port}/{trace_name}"
+
+
 def _new_model(seed: int = 0) -> KimiDeltaAttention:
     return KimiDeltaAttention(
         hidden_size=16,
@@ -78,22 +99,45 @@ def test_masked_forward_emits_default_jax_profiler_trace() -> None:
     )
 
     _log_tensor_summary("hidden_states", hidden_states)
+    _ = jax.block_until_ready(model(hidden_states, attention_mask=attention_mask))
 
-    with tempfile.TemporaryDirectory(prefix="kimi-prof-") as log_dir:
-        with jax.profiler.trace(log_dir, create_perfetto_link=False):
-            with jax.profiler.TraceAnnotation("kimi_naive_forward"):
-                with jax.profiler.StepTraceAnnotation("naive_forward_step", step_num=1):
+    log_dir = _profiler_log_dir()
+    create_perfetto_link = os.environ.get("KIMI_CREATE_PERFETTO_LINK") == "1"
+    with jax.profiler.trace(
+        log_dir,
+        create_perfetto_link=create_perfetto_link,
+        create_perfetto_trace=True,
+    ):
+        with jax.profiler.TraceAnnotation("kimi_naive_forward"):
+            for step_num in (1, 2):
+                with jax.profiler.StepTraceAnnotation("naive_forward_step", step_num=step_num):
                     output = model(hidden_states, attention_mask=attention_mask)
                     output = jax.block_until_ready(output)
 
-        trace_files = sorted(Path(log_dir).rglob("*.trace.json.gz"))
-        assert trace_files, f"Expected a default JAX profiler trace under {log_dir}."
+    trace_dir = _latest_trace_dir(log_dir)
+    trace_files = sorted(trace_dir.glob("*.trace.json.gz"))
+    assert trace_files, f"Expected a default JAX profiler trace under {trace_dir}."
 
-        trace_file = trace_files[0]
-        found = _find_trace_annotations(trace_file, "kimi_naive_forward", "naive_forward_step")
-        LOGGER.info("🧭 profiler trace=%s annotations=%s", trace_file, sorted(found))
+    trace_file = trace_files[0]
+    perfetto_trace = trace_dir / "perfetto_trace.json.gz"
+    assert perfetto_trace.exists(), f"Expected Perfetto trace under {trace_dir}."
 
-        assert found == {"kimi_naive_forward", "naive_forward_step"}
+    found = _find_trace_annotations(trace_file, "kimi_naive_forward", "naive_forward_step")
+    LOGGER.info(
+        "🧭 profiler dir=%s trace=%s perfetto=%s annotations=%s",
+        trace_dir,
+        trace_file,
+        perfetto_trace,
+        sorted(found),
+    )
+    LOGGER.info(
+        "🔗 perfetto viewer: upload %s to https://ui.perfetto.dev or serve %s and open %s (inspect step 2 for the steadiest forward-pass timing)",
+        perfetto_trace,
+        trace_dir,
+        _perfetto_viewer_url(perfetto_trace.name),
+    )
+
+    assert found == {"kimi_naive_forward", "naive_forward_step"}
 
     _log_tensor_summary("masked_output", output)
     assert output.shape == hidden_states.shape
